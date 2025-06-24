@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Claim Tokens - Marshall Infotechs</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js" type="application/javascript"></script>
+  <script src="https://cdn.jsdelivr.net/npm/web3modal@1.9.12/dist/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #fff;
+      color: #111;
+    }
+    .btn-primary {
+      background-color: #111;
+      color: #fff;
+      transition: background-color 0.3s ease;
+    }
+    .btn-primary:hover {
+      background-color: #444;
+    }
+    .btn-primary:disabled {
+      background-color: #666;
+      cursor: not-allowed;
+    }
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="antialiased">
+  <!-- Header -->
+  <header class="w-full border-b border-gray-200">
+    <div class="max-w-7xl mx-auto flex items-center justify-between p-4 md:p-6">
+      <a href="index.html" class="text-2xl font-bold tracking-tight">Marshall Infotechs</a>
+      <nav class="space-x-6 hidden md:flex text-sm font-medium">
+        <a href="index.html#services" class="hover:text-gray-700">Services</a>
+        <a href="buy.html" class="hover:text-gray-700">Buy Tokens</a>
+        <a href="claim.html" class="text-indigo-600 font-semibold">Claim Tokens</a>
+      </nav>
+      <div class="flex items-center space-x-4">
+        <select id="networkSelect" class="px-3 py-2 border border-gray-300 rounded-md text-sm">
+          <option value="mainnet">Ethereum Mainnet</option>
+          <option value="sepolia">Sepolia Testnet</option>
+        </select>
+        <button id="connectWallet" class="btn-primary px-4 py-2 rounded-md text-sm font-semibold">
+          Connect Wallet
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-4xl mx-auto px-4 py-12">
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold mb-4">Claim Your Tokens</h1>
+      <p class="text-gray-600">Check your eligibility and claim your allocated tokens</p>
+    </div>
+
+    <!-- Claim Status -->
+    <div class="bg-gray-50 rounded-lg p-6 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-center">
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 uppercase">Wallet Status</h3>
+          <p id="walletStatus" class="mt-2 text-xl font-bold text-gray-900">Not Connected</p>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 uppercase">Claimable Amount</h3>
+          <p id="claimableAmount" class="mt-2 text-xl font-bold text-gray-900">0 Tokens</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Claim Form -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <div id="notEligibleMessage" class="hidden text-center py-8">
+        <p class="text-xl font-semibold text-red-600">Your wallet is not eligible for token claims</p>
+        <p class="mt-2 text-gray-600">Please make sure you're using the correct wallet address</p>
+      </div>
+
+      <div id="claimForm" class="hidden">
+        <div class="space-y-6">
+          <div class="bg-gray-50 rounded-md p-4">
+            <p class="text-sm text-gray-600">
+              You are eligible to claim tokens. Please ensure you're connected to the correct network
+              before proceeding with the claim.
+            </p>
+          </div>
+
+          <button
+            id="claimBtn"
+            class="btn-primary w-full py-3 rounded-md text-base font-semibold flex items-center justify-center space-x-2"
+          >
+            <span>Claim Tokens</span>
+            <span id="claimSpinner" class="loading hidden"></span>
+          </button>
+
+          <!-- Claim Status -->
+          <div id="claimStatus" class="hidden rounded-md p-4">
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-white py-8 mt-16">
+    <div class="max-w-7xl mx-auto px-4 text-center text-sm">
+      <p>© 2024 Marshall Infotechs. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Contract addresses and ABI will be injected during build
+    const CONTRACT_ADDRESSES = {
+      mainnet: {
+        tokenSale: "YOUR_MAINNET_CONTRACT_ADDRESS"
+      },
+      sepolia: {
+        tokenSale: "YOUR_SEPOLIA_CONTRACT_ADDRESS"
+      }
+    };
+
+    // Web3 Variables
+    let provider;
+    let signer;
+    let selectedNetwork = 'mainnet';
+    let tokenSaleContract;
+    let userAddress;
+
+    // DOM Elements
+    const connectWalletBtn = document.getElementById('connectWallet');
+    const networkSelect = document.getElementById('networkSelect');
+    const walletStatus = document.getElementById('walletStatus');
+    const claimableAmount = document.getElementById('claimableAmount');
+    const notEligibleMessage = document.getElementById('notEligibleMessage');
+    const claimForm = document.getElementById('claimForm');
+    const claimBtn = document.getElementById('claimBtn');
+
+    // Initialize Web3Modal
+    const web3Modal = new Web3Modal({
+      cacheProvider: false,
+      providerOptions: {}
+    });
+
+    // Connect Wallet
+    async function connectWallet() {
+      try {
+        const instance = await web3Modal.connect();
+        provider = new ethers.providers.Web3Provider(instance);
+        signer = provider.getSigner();
+        userAddress = await signer.getAddress();
+        
+        // Update button text
+        connectWalletBtn.textContent = userAddress.slice(0, 6) + '...' + userAddress.slice(-4);
+        walletStatus.textContent = 'Connected: ' + userAddress.slice(0, 6) + '...' + userAddress.slice(-4);
+        
+        // Initialize contracts and check eligibility
+        await initializeContracts();
+        await checkEligibility();
+        
+        // Setup event listeners
+        instance.on("accountsChanged", handleAccountsChanged);
+        instance.on("chainChanged", handleChainChanged);
+        
+        showToast('Wallet connected successfully!', 'success');
+      } catch (error) {
+        console.error(error);
+        showToast('Failed to connect wallet', 'error');
+      }
+    }
+
+    // Initialize Contracts
+    async function initializeContracts() {
+      const network = selectedNetwork;
+      const addresses = CONTRACT_ADDRESSES[network];
+      
+      const TokenSaleABI = []; // TODO: Add contract ABI
+      
+      tokenSaleContract = new ethers.Contract(addresses.tokenSale, TokenSaleABI, signer);
+    }
+
+    // Check Eligibility
+    async function checkEligibility() {
+      try {
+        // Fetch merkle proof and amount from API or local JSON
+        const response = await fetch(`/api/merkle-proof/${userAddress}`);
+        const { proof, amount } = await response.json();
+        
+        if (amount > 0) {
+          claimableAmount.textContent = `${ethers.utils.formatEther(amount)} Tokens`;
+          notEligibleMessage.classList.add('hidden');
+          claimForm.classList.remove('hidden');
+          
+          // Store proof and amount for claim function
+          claimBtn.dataset.proof = JSON.stringify(proof);
+          claimBtn.dataset.amount = amount;
+        } else {
+          showNotEligible();
+        }
+      } catch (error) {
+        console.error('Error checking eligibility:', error);
+        showNotEligible();
+      }
+    }
+
+    // Show Not Eligible Message
+    function showNotEligible() {
+      claimableAmount.textContent = '0 Tokens';
+      notEligibleMessage.classList.remove('hidden');
+      claimForm.classList.add('hidden');
+    }
+
+    // Claim Tokens
+    async function claimTokens() {
+      claimBtn.disabled = true;
+      document.getElementById('claimSpinner').classList.remove('hidden');
+      
+      try {
+        const proof = JSON.parse(claimBtn.dataset.proof);
+        const amount = claimBtn.dataset.amount;
+        
+        const tx = await tokenSaleContract.claim(proof, amount);
+        showToast('Claim transaction submitted...', 'info');
+        
+        await tx.wait();
+        showToast('Tokens claimed successfully!', 'success');
+        
+        // Update UI
+        claimableAmount.textContent = '0 Tokens';
+        claimForm.classList.add('hidden');
+        notEligibleMessage.classList.remove('hidden');
+        notEligibleMessage.innerHTML = `
+          <p class="text-xl font-semibold text-green-600">Tokens claimed successfully!</p>
+          <p class="mt-2 text-gray-600">Your tokens have been transferred to your wallet</p>
+        `;
+      } catch (error) {
+        console.error('Claim error:', error);
+        showToast('Failed to claim tokens', 'error');
+      } finally {
+        claimBtn.disabled = false;
+        document.getElementById('claimSpinner').classList.add('hidden');
+      }
+    }
+
+    // Show Toast Notification
+    function showToast(message, type = 'info') {
+      const backgroundColor = {
+        success: '#10B981',
+        error: '#EF4444',
+        info: '#3B82F6'
+      }[type];
+      
+      Toastify({
+        text: message,
+        duration: 3000,
+        gravity: "top",
+        position: "right",
+        style: {
+          background: backgroundColor
+        }
+      }).showToast();
+    }
+
+    // Event Handlers
+    function handleAccountsChanged(accounts) {
+      window.location.reload();
+    }
+
+    function handleChainChanged() {
+      window.location.reload();
+    }
+
+    // Event Listeners
+    connectWalletBtn.addEventListener('click', connectWallet);
+    claimBtn.addEventListener('click', claimTokens);
+    networkSelect.addEventListener('change', (e) => {
+      selectedNetwork = e.target.value;
+      if (provider) {
+        initializeContracts();
+        checkEligibility();
+      }
+    });
+  </script>
+</body>
+</html>
