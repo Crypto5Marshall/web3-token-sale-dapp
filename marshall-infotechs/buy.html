@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Buy Tokens - Marshall Infotechs</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js" type="application/javascript"></script>
+  <script src="https://unpkg.com/web3modal@1.9.12/dist/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #fff;
+      color: #111;
+    }
+    .btn-primary {
+      background-color: #111;
+      color: #fff;
+      transition: background-color 0.3s ease;
+    }
+    .btn-primary:hover {
+      background-color: #444;
+    }
+    .btn-primary:disabled {
+      background-color: #666;
+      cursor: not-allowed;
+    }
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="antialiased">
+  <!-- Header -->
+  <header class="w-full border-b border-gray-200">
+    <div class="max-w-7xl mx-auto flex items-center justify-between p-4 md:p-6">
+      <a href="index.html" class="text-2xl font-bold tracking-tight">Marshall Infotechs</a>
+      <nav class="space-x-6 hidden md:flex text-sm font-medium">
+        <a href="index.html#services" class="hover:text-gray-700">Services</a>
+        <a href="buy.html" class="text-indigo-600 font-semibold">Buy Tokens</a>
+        <a href="claim.html" class="hover:text-gray-700">Claim Tokens</a>
+      </nav>
+      <div class="flex items-center space-x-4">
+        <select id="networkSelect" class="px-3 py-2 border border-gray-300 rounded-md text-sm">
+          <option value="localhost">Localhost</option>
+        </select>
+        <button id="connectWallet" class="btn-primary px-4 py-2 rounded-md text-sm font-semibold">
+          Connect Wallet
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-4xl mx-auto px-4 py-12">
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold mb-4">Token Sale</h1>
+      <p class="text-gray-600">Purchase tokens using USDT</p>
+    </div>
+
+    <!-- Sale Status -->
+    <div class="bg-gray-50 rounded-lg p-6 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 uppercase">Sale Status</h3>
+          <p id="saleStatus" class="mt-2 text-xl font-bold text-green-600">Active</p>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 uppercase">Time Remaining</h3>
+          <p id="timeRemaining" class="mt-2 text-xl font-bold">Loading...</p>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 uppercase">Token Price</h3>
+          <p id="tokenPrice" class="mt-2 text-xl font-bold">0.02 USDT</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Purchase Form -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <div class="space-y-6">
+        <!-- USDT Amount Input -->
+        <div>
+          <label for="usdtAmount" class="block text-sm font-medium text-gray-700 mb-2">
+            USDT Amount
+          </label>
+          <div class="relative rounded-md shadow-sm">
+            <input
+              type="number"
+              id="usdtAmount"
+              class="block w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+              placeholder="Enter USDT amount"
+              step="0.01"
+              min="0"
+            />
+          </div>
+          <p class="mt-2 text-sm text-gray-500" id="tokenAmount">
+            You will receive: 0 Tokens
+          </p>
+        </div>
+
+        <!-- Transaction Buttons -->
+        <div class="space-y-4">
+          <button
+            id="approveBtn"
+            class="btn-primary w-full py-3 rounded-md text-base font-semibold flex items-center justify-center space-x-2"
+            disabled
+          >
+            <span>Approve USDT</span>
+            <span id="approveSpinner" class="loading hidden"></span>
+          </button>
+          
+          <button
+            id="buyBtn"
+            class="btn-primary w-full py-3 rounded-md text-base font-semibold flex items-center justify-center space-x-2"
+            disabled
+          >
+            <span>Buy Tokens</span>
+            <span id="buySpinner" class="loading hidden"></span>
+          </button>
+        </div>
+
+        <!-- Transaction Status -->
+        <div id="txStatus" class="hidden rounded-md p-4">
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-white py-8 mt-16">
+    <div class="max-w-7xl mx-auto px-4 text-center text-sm">
+      <p>© 2024 Marshall Infotechs. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Contract addresses and ABI will be injected during build
+    const CONTRACT_ADDRESSES = {
+      localhost: {
+        tokenSale: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+        usdt: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+        saleToken: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+      }
+    };
+
+    // Contract ABIs
+    const TokenSaleABI = [
+      "function buy(uint256 usdtAmount) external nonReentrant",
+      "function tokenPrice() external view returns (uint256)",
+      "function saleStartTime() external view returns (uint256)",
+      "function saleEndTime() external view returns (uint256)"
+    ];
+
+    const ERC20ABI = [
+      "function approve(address spender, uint256 amount) external returns (bool)",
+      "function allowance(address owner, address spender) external view returns (uint256)",
+      "function balanceOf(address account) external view returns (uint256)"
+    ];
+
+    // Web3 Variables
+    let provider;
+    let signer;
+    let selectedNetwork = 'localhost';
+    let tokenSaleContract;
+    let usdtContract;
+    let saleTokenContract;
+    let userAddress;
+
+    // DOM Elements
+    const connectWalletBtn = document.getElementById('connectWallet');
+    const networkSelect = document.getElementById('networkSelect');
+    const usdtAmountInput = document.getElementById('usdtAmount');
+    const tokenAmountDisplay = document.getElementById('tokenAmount');
+    const approveBtn = document.getElementById('approveBtn');
+    const buyBtn = document.getElementById('buyBtn');
+    const saleStatus = document.getElementById('saleStatus');
+    const timeRemaining = document.getElementById('timeRemaining');
+    const tokenPrice = document.getElementById('tokenPrice');
+
+    // Initialize Web3Modal
+    const web3Modal = new Web3Modal.default({
+      cacheProvider: false,
+      providerOptions: {} // MetaMask is included by default
+    });
+
+    // Check if MetaMask is installed
+    function isMetaMaskInstalled() {
+      return Boolean(window.ethereum && window.ethereum.isMetaMask);
+    }
+
+    // Connect Wallet
+    async function connectWallet() {
+      try {
+        console.log("Connecting wallet...");
+        
+        if (!isMetaMaskInstalled()) {
+          showToast("Please install MetaMask to continue", "error");
+          return;
+        }
+
+        console.log("Requesting account access...");
+        const instance = await web3Modal.connect();
+        console.log("Web3Modal instance created");
+        
+        provider = new ethers.providers.Web3Provider(instance);
+        console.log("Web3Provider created");
+        
+        // Request network change to localhost (chainId: 31337)
+        try {
+          console.log("Switching to Hardhat network...");
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x7A69' }], // 31337 in hex
+          });
+        } catch (switchError) {
+          console.log("Network switch error:", switchError);
+          // Add the network if it doesn't exist
+          if (switchError.code === 4902) {
+            console.log("Adding Hardhat network...");
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x7A69',
+                chainName: 'Localhost 8545',
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                rpcUrls: ['http://localhost:8545']
+              }]
+            });
+          } else {
+            showToast("Failed to switch network. Please switch to Localhost 8545 manually.", "error");
+            return;
+          }
+        }
+
+        console.log("Getting signer...");
+        signer = provider.getSigner();
+        userAddress = await signer.getAddress();
+        console.log("Connected address:", userAddress);
+        
+        // Update network in UI
+        networkSelect.value = 'localhost';
+        showToast("Wallet connected successfully!", "success");
+        
+        // Update button text
+        connectWalletBtn.textContent = userAddress.slice(0, 6) + '...' + userAddress.slice(-4);
+        
+        // Enable form
+        approveBtn.disabled = false;
+        
+        // Initialize contracts
+        await initializeContracts();
+        
+        // Setup event listeners
+        instance.on("accountsChanged", handleAccountsChanged);
+        instance.on("chainChanged", handleChainChanged);
+        
+        showToast('Wallet connected successfully!', 'success');
+      } catch (error) {
+        console.error(error);
+        showToast('Failed to connect wallet', 'error');
+      }
+    }
+
+    // Initialize Contracts
+    async function initializeContracts() {
+      const network = selectedNetwork;
+      const addresses = CONTRACT_ADDRESSES[network];
+      
+      tokenSaleContract = new ethers.Contract(addresses.tokenSale, TokenSaleABI, signer);
+      usdtContract = new ethers.Contract(addresses.usdt, ERC20ABI, signer);
+      saleTokenContract = new ethers.Contract(addresses.saleToken, ERC20ABI, signer);
+      
+      // Update UI with contract data
+      await updateSaleStatus();
+    }
+
+    // Update Sale Status
+    async function updateSaleStatus() {
+      try {
+        const [start, end, price] = await Promise.all([
+          tokenSaleContract.saleStartTime(),
+          tokenSaleContract.saleEndTime(),
+          tokenSaleContract.tokenPrice()
+        ]);
+        
+        const now = Math.floor(Date.now() / 1000);
+        if (now < start) {
+          saleStatus.textContent = 'Not Started';
+          saleStatus.className = 'mt-2 text-xl font-bold text-yellow-600';
+        } else if (now > end) {
+          saleStatus.textContent = 'Ended';
+          saleStatus.className = 'mt-2 text-xl font-bold text-red-600';
+        } else {
+          saleStatus.textContent = 'Active';
+          saleStatus.className = 'mt-2 text-xl font-bold text-green-600';
+        }
+        
+        // Update countdown
+        updateCountdown(start, end);
+        
+        // Update price
+        const priceInUsdt = ethers.utils.formatUnits(price, 6);
+        tokenPrice.textContent = `${priceInUsdt} USDT`;
+      } catch (error) {
+        console.error('Error updating sale status:', error);
+      }
+    }
+
+    // Update Countdown
+    function updateCountdown(start, end) {
+      const now = Math.floor(Date.now() / 1000);
+      let target;
+      
+      if (now < start) {
+        target = start;
+      } else if (now < end) {
+        target = end;
+      } else {
+        timeRemaining.textContent = 'Sale Ended';
+        return;
+      }
+      
+      const updateTimer = () => {
+        const now = Math.floor(Date.now() / 1000);
+        const diff = target - now;
+        
+        if (diff <= 0) {
+          updateSaleStatus();
+          return;
+        }
+        
+        const days = Math.floor(diff / 86400);
+        const hours = Math.floor((diff % 86400) / 3600);
+        const minutes = Math.floor((diff % 3600) / 60);
+        const seconds = diff % 60;
+        
+        timeRemaining.textContent = 
+          `${days}d ${hours}h ${minutes}m ${seconds}s`;
+      };
+      
+      updateTimer();
+      setInterval(updateTimer, 1000);
+    }
+
+    // Calculate Token Amount
+    function calculateTokenAmount(usdtAmount) {
+      if (!usdtAmount || isNaN(usdtAmount)) {
+        tokenAmountDisplay.textContent = 'You will receive: 0 Tokens';
+        return;
+      }
+      
+      const tokenAmount = (parseFloat(usdtAmount) / 0.02).toFixed(2);
+      tokenAmountDisplay.textContent = `You will receive: ${tokenAmount} Tokens`;
+    }
+
+    // Approve USDT
+    async function approveUSDT() {
+      if (!usdtAmount.value || isNaN(usdtAmount.value)) {
+        showToast('Please enter a valid USDT amount', 'error');
+        return;
+      }
+      
+      const amount = ethers.utils.parseUnits(usdtAmount.value, 6);
+      approveBtn.disabled = true;
+      document.getElementById('approveSpinner').classList.remove('hidden');
+      
+      try {
+        const tx = await usdtContract.approve(CONTRACT_ADDRESSES[selectedNetwork].tokenSale, amount);
+        showToast('Approval transaction submitted...', 'info');
+        
+        await tx.wait();
+        showToast('USDT approved successfully!', 'success');
+        buyBtn.disabled = false;
+      } catch (error) {
+        console.error('Approval error:', error);
+        showToast('Failed to approve USDT', 'error');
+      } finally {
+        approveBtn.disabled = false;
+        document.getElementById('approveSpinner').classList.add('hidden');
+      }
+    }
+
+    // Buy Tokens
+    async function buyTokens() {
+      if (!usdtAmount.value || isNaN(usdtAmount.value)) {
+        showToast('Please enter a valid USDT amount', 'error');
+        return;
+      }
+      
+      const amount = ethers.utils.parseUnits(usdtAmount.value, 6);
+      buyBtn.disabled = true;
+      document.getElementById('buySpinner').classList.remove('hidden');
+      
+      try {
+        const tx = await tokenSaleContract.buy(amount);
+        showToast('Purchase transaction submitted...', 'info');
+        
+        await tx.wait();
+        showToast('Tokens purchased successfully!', 'success');
+      } catch (error) {
+        console.error('Purchase error:', error);
+        showToast('Failed to purchase tokens', 'error');
+      } finally {
+        buyBtn.disabled = false;
+        document.getElementById('buySpinner').classList.add('hidden');
+      }
+    }
+
+    // Show Toast Notification
+    function showToast(message, type = 'info') {
+      const backgroundColor = {
+        success: '#10B981',
+        error: '#EF4444',
+        info: '#3B82F6'
+      }[type];
+      
+      Toastify({
+        text: message,
+        duration: 3000,
+        gravity: "top",
+        position: "right",
+        style: {
+          background: backgroundColor
+        }
+      }).showToast();
+    }
+
+    // Event Handlers
+    function handleAccountsChanged(accounts) {
+      window.location.reload();
+    }
+
+    function handleChainChanged() {
+      window.location.reload();
+    }
+
+    // Event Listeners
+    connectWalletBtn.addEventListener('click', connectWallet);
+    approveBtn.addEventListener('click', approveUSDT);
+    buyBtn.addEventListener('click', buyTokens);
+    usdtAmountInput.addEventListener('input', (e) => calculateTokenAmount(e.target.value));
+    networkSelect.addEventListener('change', (e) => {
+      selectedNetwork = e.target.value;
+      if (provider) {
+        initializeContracts();
+      }
+    });
+  </script>
+</body>
+</html>
