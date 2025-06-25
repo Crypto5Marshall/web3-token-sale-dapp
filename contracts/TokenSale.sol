@@ -34,7 +34,7 @@ contract TokenSale is Ownable, ReentrancyGuard {
     event SaleTimingUpdated(uint256 startTime, uint256 endTime);
     event MerkleRootUpdated(bytes32 newRoot);
 
-    constructor(address initialOwner) Ownable(initialOwner) {
+    constructor() Ownable() {
         usdt = IERC20(0x973104fAa7F2B11787557e85953ECA6B4e262328); // Sepolia USDT
         saleToken = IERC20(0x28e24aD822d811cB2af812f23DA2E92dBf8Bc290); // Sale Token
         tokenPrice = 20000; // 0.02 USDT (6 decimals)
