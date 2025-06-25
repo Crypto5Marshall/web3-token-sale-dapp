@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/project/sandbox/user-workspace/contracts/TokenSale.sol": {
-      "lastModificationDate": 1750796103694,
-      "contentHash": "f5af6beb2643db52403c3652854e9e06",
+      "lastModificationDate": 1750812676605,
+      "contentHash": "8913faee3135f0430017097f0289d3cb",
       "sourceName": "contracts/TokenSale.sol",
       "solcConfig": {
         "version": "0.8.19",
@@ -439,6 +439,46 @@
       ],
       "artifacts": [
         "MockERC20"
+      ]
+    },
+    "/project/sandbox/user-workspace/contracts/TokenSaleLocked.sol": {
+      "lastModificationDate": 1750812582135,
+      "contentHash": "d2b8d46309be8cbbd18e26648185a0b9",
+      "sourceName": "contracts/TokenSaleLocked.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+        "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol",
+        "@openzeppelin/contracts/access/Ownable.sol",
+        "@openzeppelin/contracts/security/ReentrancyGuard.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "TokenSaleLocked"
       ]
     }
   }
