@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Token Sale - Marshall Infotechs</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <style>
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    #txStatus {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;
+    }
+
+    #txStatus.show {
+      display: block;
+    }
+
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+    }
+
+    #toast {
+      visibility: hidden;
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: #333;
+      color: white;
+      padding: 16px;
+      border-radius: 4px;
+      z-index: 1000;
+    }
+
+    #toast.show {
+      visibility: visible;
+      animation: fadein 0.5s, fadeout 0.5s 2.5s;
+    }
+
+    @keyframes fadein {
+      from {opacity: 0;}
+      to {opacity: 1;}
+    }
+
+    @keyframes fadeout {
+      from {opacity: 1;}
+      to {opacity: 0;}
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <nav class="bg-white shadow">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex">
+          <div class="flex-shrink-0 flex items-center">
+            <span class="text-xl font-bold">Marshall Infotechs</span>
+          </div>
+          <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+            <a href="#" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+              Services
+            </a>
+            <a href="#" class="border-indigo-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+              Buy Tokens
+            </a>
+            <a href="claim-locked.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+              Claim Tokens
+            </a>
+          </div>
+        </div>
+        <div class="flex items-center">
+          <select id="network" class="mr-4 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+            <option value="sepolia">Sepolia Testnet</option>
+          </select>
+          <button id="connectBtn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            Connect Wallet
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <div class="px-4 py-6 sm:px-0">
+      <div class="max-w-3xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Token Sale</h1>
+        <p class="text-gray-600 mb-8">Purchase tokens using USDT (360-day lock period)</p>
+
+        <div class="bg-white shadow rounded-lg p-6 mb-8">
+          <div class="grid grid-cols-3 gap-6 mb-8">
+            <div>
+              <h3 class="text-sm font-medium text-gray-500 mb-2">SALE STATUS</h3>
+              <p id="saleStatus" class="text-lg font-medium text-gray-900">Connect Wallet</p>
+            </div>
+            <div>
+              <h3 class="text-sm font-medium text-gray-500 mb-2">TIME REMAINING</h3>
+              <p id="timeRemaining" class="text-lg font-medium text-gray-900">Connect Wallet</p>
+            </div>
+            <div>
+              <h3 class="text-sm font-medium text-gray-500 mb-2">TOKEN PRICE</h3>
+              <p class="text-lg font-medium text-gray-900">0.02 USDT</p>
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <label for="usdtAmount" class="block text-sm font-medium text-gray-700">USDT Amount</label>
+            <div class="mt-1">
+              <input type="number" name="usdtAmount" id="usdtAmount" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" placeholder="Enter USDT amount">
+            </div>
+            <p id="tokenAmount" class="mt-2 text-sm text-gray-500">You will receive: 0 Tokens (locked for 360 days)</p>
+          </div>
+
+          <p class="text-sm text-gray-500 mb-6">Transaction Steps:</p>
+          <div class="space-y-4">
+            <button id="approveBtn" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+              <span>1. Approve USDT</span>
+              <span id="approveSpinner" class="loading hidden"></span>
+            </button>
+            <button id="buyBtn" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+              <span>2. Buy Tokens</span>
+              <span id="buySpinner" class="loading hidden"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="txStatus" class="bg-white rounded-lg p-6 max-w-sm mx-auto">
+    <div class="text-center">
+      <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+        <i id="txIcon" class="fas fa-circle-notch fa-spin text-blue-600"></i>
+      </div>
+      <h3 id="txTitle" class="text-lg leading-6 font-medium text-gray-900 mb-2">Processing Transaction</h3>
+      <p id="txMessage" class="text-sm text-gray-500">Please wait while your transaction is being processed...</p>
+    </div>
+  </div>
+
+  <div id="toast" class="rounded-md p-4">
+    <div class="flex">
+      <div class="flex-shrink-0">
+        <i id="toastIcon" class="fas fa-info-circle text-blue-400"></i>
+      </div>
+      <div class="ml-3">
+        <p id="toastMessage" class="text-sm font-medium text-white"></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Contract Addresses
+    const TOKEN_SALE_ADDRESS = '0xbc485534dab82189644377E2C6a0331EaD288812';
+    const USDT_ADDRESS = '0x973104fAa7F2B11787557e85953ECA6B4e262328';
+
+    // Contract ABIs
+    const TOKEN_SALE_ABI = [
+      "function buy(uint256 usdtAmount) external",
+      "function saleStartTime() external view returns (uint256)",
+      "function saleEndTime() external view returns (uint256)",
+      "function totalTokensSold() external view returns (uint256)",
+      "function hardCap() external view returns (uint256)"
+    ];
+
+    const ERC20_ABI = [
+      "function approve(address spender, uint256 amount) external returns (bool)",
+      "function allowance(address owner, address spender) external view returns (uint256)",
+      "function balanceOf(address account) external view returns (uint256)"
+    ];
+
+    // UI Elements
+    const connectBtn = document.getElementById('connectBtn');
+    const approveBtn = document.getElementById('approveBtn');
+    const buyBtn = document.getElementById('buyBtn');
+    const usdtAmount = document.getElementById('usdtAmount');
+    const tokenAmountDisplay = document.getElementById('tokenAmount');
+    const saleStatus = document.getElementById('saleStatus');
+    const timeRemaining = document.getElementById('timeRemaining');
+
+    // Global Variables
+    let provider;
+    let signer;
+    let userAddress;
+    let tokenSale;
+    let usdt;
+
+    // Initialize
+    async function init() {
+      console.log('Setting up event listeners');
+      connectBtn.addEventListener('click', connectWallet);
+      approveBtn.addEventListener('click', approveUSDT);
+      buyBtn.addEventListener('click', buyTokens);
+      usdtAmount.addEventListener('input', () => calculateTokenAmount(usdtAmount.value));
+      
+      approveBtn.disabled = true;
+      buyBtn.disabled = true;
+
+      // Check if already connected
+      if (window.ethereum && window.ethereum.selectedAddress) {
+        connectWallet();
+      }
+    }
+
+    // Check if MetaMask is installed
+    function isMetaMaskInstalled() {
+      return Boolean(window.ethereum && window.ethereum.isMetaMask);
+    }
+
+    // Connect Wallet
+    async function connectWallet() {
+      console.log('Connecting wallet...');
+      try {
+        if (!isMetaMaskInstalled()) {
+          showToast('Please install MetaMask to continue', 'error');
+          window.open('https://metamask.io/download/', '_blank');
+          return;
+        }
+
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        const accounts = await provider.send("eth_requestAccounts", []);
+        if (!accounts || accounts.length === 0) {
+          showToast('Please connect your MetaMask wallet', 'error');
+          return;
+        }
+        
+        signer = provider.getSigner();
+        userAddress = await signer.getAddress();
+        
+        tokenSale = new ethers.Contract(TOKEN_SALE_ADDRESS, TOKEN_SALE_ABI, signer);
+        usdt = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, signer);
+
+        connectBtn.textContent = userAddress.slice(0, 6) + '...' + userAddress.slice(-4);
+        approveBtn.disabled = false;
+
+        updateSaleStatus();
+        startStatusUpdateInterval();
+      } catch (error) {
+        console.error('Error connecting wallet:', error);
+        showToast('Failed to connect wallet', 'error');
+      }
+    }
+
+    // Calculate Token Amount
+    function calculateTokenAmount(usdtAmount) {
+      if (!usdtAmount || isNaN(usdtAmount)) {
+        tokenAmountDisplay.textContent = 'You will receive: 0 Tokens (locked for 360 days)';
+        return;
+      }
+      
+      // Convert USDT amount to BigNumber with 18 decimals (USDT's decimals)
+      const usdtAmountBN = ethers.utils.parseUnits(usdtAmount, 18);
+      
+      // Calculate tokens: (USDT amount * 10^18) / token price
+      const tokenAmountBN = usdtAmountBN.mul(ethers.constants.WeiPerEther).div(20000);
+      const tokenAmount = parseFloat(ethers.utils.formatEther(tokenAmountBN));
+      const walletLimit = 10000; // 10k tokens
+      
+      if (tokenAmount > walletLimit) {
+        tokenAmountDisplay.textContent = `Amount exceeds wallet limit of ${walletLimit} tokens`;
+        tokenAmountDisplay.className = 'mt-2 text-sm text-red-600';
+        approveBtn.disabled = true;
+        buyBtn.disabled = true;
+        return;
+      }
+      
+      tokenAmountDisplay.textContent = `You will receive: ${tokenAmount.toFixed(2)} Tokens (locked for 360 days)`;
+      tokenAmountDisplay.className = 'mt-2 text-sm text-gray-500';
+      approveBtn.disabled = false;
+    }
+
+    // Show Transaction Status
+    function showTxStatus(title, message) {
+      document.getElementById('txTitle').textContent = title;
+      document.getElementById('txMessage').textContent = message;
+      document.getElementById('txStatus').classList.add('show');
+      document.body.insertAdjacentHTML('beforeend', '<div class="overlay"></div>');
+    }
+
+    // Hide Transaction Status
+    function hideTxStatus() {
+      document.getElementById('txStatus').classList.remove('show');
+      const overlay = document.querySelector('.overlay');
+      if (overlay) overlay.remove();
+    }
+
+    // Show Toast Message
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      const toastMessage = document.getElementById('toastMessage');
+      const toastIcon = document.getElementById('toastIcon');
+      
+      toastMessage.textContent = message;
+      
+      // Update icon and color based on type
+      if (type === 'error') {
+        toast.style.backgroundColor = '#EF4444';
+        toastIcon.className = 'fas fa-exclamation-circle text-white';
+      } else if (type === 'success') {
+        toast.style.backgroundColor = '#10B981';
+        toastIcon.className = 'fas fa-check-circle text-white';
+      } else {
+        toast.style.backgroundColor = '#3B82F6';
+        toastIcon.className = 'fas fa-info-circle text-white';
+      }
+      
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+
+    // Approve USDT
+    async function approveUSDT() {
+      if (!usdtAmount.value || isNaN(usdtAmount.value)) {
+        showToast('Please enter a valid USDT amount', 'error');
+        return;
+      }
+
+      // Convert USDT amount to BigNumber with 18 decimals (USDT's decimals)
+      const usdtAmountBN = ethers.utils.parseUnits(usdtAmount.value, 18);
+      
+      // Calculate tokens: (USDT amount * 10^18) / token price
+      const tokenAmountBN = usdtAmountBN.mul(ethers.constants.WeiPerEther).div(20000);
+      const tokenAmount = parseFloat(ethers.utils.formatEther(tokenAmountBN));
+
+      if (tokenAmount > 10000) {
+        showToast('Amount exceeds wallet limit of 10,000 tokens', 'error');
+        return;
+      }
+      
+      // Use 18 decimals for USDT
+      const amount = ethers.utils.parseUnits(usdtAmount.value, 18);
+      approveBtn.disabled = true;
+      document.getElementById('approveSpinner').classList.remove('hidden');
+      
+      try {
+        showTxStatus('Approving USDT', 'Please confirm the transaction in your wallet...');
+        const tx = await usdt.approve(TOKEN_SALE_ADDRESS, amount);
+        showTxStatus('Processing Approval', 'Please wait while your transaction is being processed...');
+        await tx.wait();
+        showToast('USDT approved successfully', 'success');
+        buyBtn.disabled = false;
+      } catch (error) {
+        console.error('Error approving USDT:', error);
+        showToast('Failed to approve USDT', 'error');
+        approveBtn.disabled = false;
+      }
+      
+      document.getElementById('approveSpinner').classList.add('hidden');
+      hideTxStatus();
+    }
+
+    // Buy Tokens
+    async function buyTokens() {
+      if (!usdtAmount.value || isNaN(usdtAmount.value)) {
+        showToast('Please enter a valid USDT amount', 'error');
+        return;
+      }
+
+      // Convert USDT amount to BigNumber with 18 decimals (USDT's decimals)
+      const usdtAmountBN = ethers.utils.parseUnits(usdtAmount.value, 18);
+      
+      // Calculate tokens: (USDT amount * 10^18) / token price
+      const tokenAmountBN = usdtAmountBN.mul(ethers.constants.WeiPerEther).div(20000);
+      const tokenAmount = parseFloat(ethers.utils.formatEther(tokenAmountBN));
+
+      if (tokenAmount > 10000) {
+        showToast('Amount exceeds wallet limit of 10,000 tokens', 'error');
+        return;
+      }
+      
+      // Use 18 decimals for USDT
+      const amount = ethers.utils.parseUnits(usdtAmount.value, 18);
+      buyBtn.disabled = true;
+      document.getElementById('buySpinner').classList.remove('hidden');
+      
+      try {
+        showTxStatus('Buying Tokens', 'Please confirm the transaction in your wallet...');
+        const tx = await tokenSale.buy(amount);
+        showTxStatus('Processing Purchase', 'Please wait while your transaction is being processed...');
+        await tx.wait();
+        showToast('Tokens purchased successfully', 'success');
+      } catch (error) {
+        console.error('Error buying tokens:', error);
+        showToast('Failed to buy tokens', 'error');
+        buyBtn.disabled = false;
+      }
+      
+      document.getElementById('buySpinner').classList.add('hidden');
+      hideTxStatus();
+    }
+
+    // Update Sale Status
+    async function updateSaleStatus() {
+      try {
+        const [startTime, endTime, totalSold, hardCap] = await Promise.all([
+          tokenSale.saleStartTime(),
+          tokenSale.saleEndTime(),
+          tokenSale.totalTokensSold(),
+          tokenSale.hardCap()
+        ]);
+
+        const now = Math.floor(Date.now() / 1000);
+        const totalSoldFormatted = parseFloat(ethers.utils.formatEther(totalSold));
+        const hardCapFormatted = parseFloat(ethers.utils.formatEther(hardCap));
+        const progress = (totalSoldFormatted / hardCapFormatted * 100).toFixed(2);
+
+        if (now < startTime) {
+          saleStatus.textContent = 'Not Started';
+          const timeToStart = startTime - now;
+          timeRemaining.textContent = formatTime(timeToStart);
+        } else if (now > endTime) {
+          saleStatus.textContent = 'Ended';
+          timeRemaining.textContent = '0d 0h 0m';
+        } else {
+          saleStatus.textContent = `${progress}% Sold`;
+          const timeLeft = endTime - now;
+          timeRemaining.textContent = formatTime(timeLeft);
+        }
+      } catch (error) {
+        console.error('Error updating sale status:', error);
+      }
+    }
+
+    // Format Time
+    function formatTime(seconds) {
+      const days = Math.floor(seconds / 86400);
+      const hours = Math.floor((seconds % 86400) / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return `${days}d ${hours}h ${minutes}m`;
+    }
+
+    // Start Status Update Interval
+    function startStatusUpdateInterval() {
+      updateSaleStatus();
+      setInterval(updateSaleStatus, 60000); // Update every minute
+    }
+
+    // Initialize on load
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>
