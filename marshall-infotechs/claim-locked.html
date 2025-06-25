@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Claim Tokens - Marshall Infotechs</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #fff;
+      color: #111;
+    }
+    .btn-primary {
+      background-color: #111;
+      color: #fff;
+      transition: background-color 0.3s ease;
+    }
+    .btn-primary:hover {
+      background-color: #444;
+    }
+    .btn-primary:disabled {
+      background-color: #666;
+      cursor: not-allowed;
+    }
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="antialiased">
+  <!-- Header -->
+  <header class="w-full border-b border-gray-200">
+    <div class="max-w-7xl mx-auto flex items-center justify-between p-4 md:p-6">
+      <a href="index.html" class="text-2xl font-bold tracking-tight">Marshall Infotechs</a>
+      <nav class="space-x-6 hidden md:flex text-sm font-medium">
+        <a href="index.html#services" class="hover:text-gray-700">Services</a>
+        <a href="buy.html" class="hover:text-gray-700">Buy Tokens</a>
+        <a href="claim.html" class="text-indigo-600 font-semibold">Claim Tokens</a>
+      </nav>
+      <div class="flex items-center space-x-4">
+        <select id="networkSelect" class="px-3 py-2 border border-gray-300 rounded-md text-sm">
+          <option value="sepolia">Sepolia Testnet</option>
+        </select>
+        <button id="connectWallet" class="btn-primary px-4 py-2 rounded-md text-sm font-semibold">
+          Connect Wallet
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-4xl mx-auto px-4 py-12">
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold mb-4">Claim Tokens</h1>
+      <p class="text-gray-600">Claim your purchased tokens after the lock period</p>
+    </div>
+
+    <!-- Claim Status -->
+    <div class="bg-gray-50 rounded-lg p-6 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 uppercase">Claimable Amount</h3>
+          <p id="claimableAmount" class="mt-2 text-xl font-bold">0 Tokens</p>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 uppercase">Lock Time Remaining</h3>
+          <p id="lockTimeRemaining" class="mt-2 text-xl font-bold">Loading...</p>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 uppercase">Status</h3>
+          <p id="claimStatus" class="mt-2 text-xl font-bold text-yellow-600">Not Connected</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Claim Button -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <button
+        id="claimBtn"
+        class="btn-primary w-full py-3 rounded-md text-base font-semibold flex items-center justify-center space-x-2"
+        disabled
+      >
+        <span>Claim Tokens</span>
+        <span id="claimSpinner" class="loading hidden"></span>
+      </button>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-white py-8 mt-16">
+    <div class="max-w-7xl mx-auto px-4 text-center text-sm">
+      <p>© 2024 Marshall Infotechs. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Contract addresses and ABI will be injected during build
+    const CONTRACT_ADDRESSES = {
+      sepolia: {
+        tokenSale: "0xbc485534dab82189644377E2C6a0331EaD288812",
+        usdt: "0x973104fAa7F2B11787557e85953ECA6B4e262328",
+        mockErc20: "0x28e24aD822d811cB2af812f23DA2E92dBf8Bc290"
+      }
+    };
+
+    // Contract ABIs
+    const TokenSaleABI = [
+      "function claim() external",
+      "function getClaimInfo(address user) external view returns (uint256 claimable, uint256 timeRemaining)",
+      "function LOCK_PERIOD() external view returns (uint256)"
+    ];
+
+    // Web3 Variables
+    let provider;
+    let signer;
+    let selectedNetwork = 'sepolia';
+    let tokenSaleContract;
+    let userAddress;
+
+    // DOM Elements
+    const connectWalletBtn = document.getElementById('connectWallet');
+    const networkSelect = document.getElementById('networkSelect');
+    const claimBtn = document.getElementById('claimBtn');
+    const claimableAmount = document.getElementById('claimableAmount');
+    const lockTimeRemaining = document.getElementById('lockTimeRemaining');
+    const claimStatus = document.getElementById('claimStatus');
+
+    // Check if MetaMask is installed
+    function isMetaMaskInstalled() {
+      return Boolean(window.ethereum && window.ethereum.isMetaMask);
+    }
+
+    // Connect Wallet
+    async function connectWallet() {
+      try {
+        console.log("Connecting wallet...");
+        
+        if (!isMetaMaskInstalled()) {
+          showToast("Please install MetaMask to continue", "error");
+          return;
+        }
+
+        console.log("Requesting account access...");
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        console.log("Connected accounts:", accounts);
+        
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        console.log("Web3Provider created");
+        
+        // Request network change to Sepolia (chainId: 11155111)
+        try {
+          console.log("Switching to Sepolia network...");
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0xaa36a7' }], // 11155111 in hex
+          });
+        } catch (switchError) {
+          console.log("Network switch error:", switchError);
+          // Add the network if it doesn't exist
+          if (switchError.code === 4902) {
+            console.log("Adding Sepolia network...");
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0xaa36a7',
+                chainName: 'Sepolia',
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                rpcUrls: ['https://sepolia.infura.io/v3/']
+              }]
+            });
+          } else {
+            showToast("Failed to switch network. Please switch to Sepolia network manually.", "error");
+            return;
+          }
+        }
+
+        console.log("Getting signer...");
+        signer = provider.getSigner();
+        userAddress = await signer.getAddress();
+        console.log("Connected address:", userAddress);
+        
+        // Update network in UI
+        networkSelect.value = 'sepolia';
+        showToast("Wallet connected successfully!", "success");
+        
+        // Update button text
+        connectWalletBtn.textContent = userAddress.slice(0, 6) + '...' + userAddress.slice(-4);
+        
+        // Initialize contracts
+        await initializeContracts();
+        
+        // Setup MetaMask event listeners
+        window.ethereum.on("accountsChanged", handleAccountsChanged);
+        window.ethereum.on("chainChanged", handleChainChanged);
+        
+        showToast('Wallet connected successfully!', 'success');
+      } catch (error) {
+        console.error(error);
+        showToast('Failed to connect wallet', 'error');
+      }
+    }
+
+    // Initialize Contracts
+    async function initializeContracts() {
+      const network = selectedNetwork;
+      const addresses = CONTRACT_ADDRESSES[network];
+      
+      tokenSaleContract = new ethers.Contract(addresses.tokenSale, TokenSaleABI, signer);
+      
+      // Update UI with contract data
+      await updateClaimInfo();
+    }
+
+    // Update Claim Info
+    async function updateClaimInfo() {
+      try {
+        const [claimable, timeRemaining] = await tokenSaleContract.getClaimInfo(userAddress);
+        
+        claimableAmount.textContent = `${ethers.utils.formatEther(claimable)} Tokens`;
+        
+        if (timeRemaining.gt(0)) {
+          const days = Math.floor(timeRemaining / 86400);
+          const hours = Math.floor((timeRemaining % 86400) / 3600);
+          const minutes = Math.floor((timeRemaining % 3600) / 60);
+          lockTimeRemaining.textContent = `${days}d ${hours}h ${minutes}m`;
+          claimStatus.textContent = 'Locked';
+          claimStatus.className = 'mt-2 text-xl font-bold text-yellow-600';
+          claimBtn.disabled = true;
+        } else if (claimable.gt(0)) {
+          lockTimeRemaining.textContent = 'Unlocked';
+          claimStatus.textContent = 'Ready to Claim';
+          claimStatus.className = 'mt-2 text-xl font-bold text-green-600';
+          claimBtn.disabled = false;
+        } else {
+          lockTimeRemaining.textContent = 'No tokens to claim';
+          claimStatus.textContent = 'No Tokens';
+          claimStatus.className = 'mt-2 text-xl font-bold text-gray-600';
+          claimBtn.disabled = true;
+        }
+      } catch (error) {
+        console.error('Error updating claim info:', error);
+        showToast('Failed to update claim info', 'error');
+      }
+    }
+
+    // Claim Tokens
+    async function claimTokens() {
+      claimBtn.disabled = true;
+      document.getElementById('claimSpinner').classList.remove('hidden');
+      
+      try {
+        const tx = await tokenSaleContract.claim();
+        showToast('Claim transaction submitted...', 'info');
+        
+        await tx.wait();
+        showToast('Tokens claimed successfully!', 'success');
+        
+        // Update UI
+        await updateClaimInfo();
+      } catch (error) {
+        console.error('Claim error:', error);
+        showToast('Failed to claim tokens', 'error');
+      } finally {
+        claimBtn.disabled = false;
+        document.getElementById('claimSpinner').classList.add('hidden');
+      }
+    }
+
+    // Show Toast Notification
+    function showToast(message, type = 'info') {
+      const backgroundColor = {
+        success: '#10B981',
+        error: '#EF4444',
+        info: '#3B82F6'
+      }[type];
+      
+      Toastify({
+        text: message,
+        duration: 3000,
+        gravity: "top",
+        position: "right",
+        style: {
+          background: backgroundColor
+        }
+      }).showToast();
+    }
+
+    // Event Handlers
+    function handleAccountsChanged(accounts) {
+      window.location.reload();
+    }
+
+    function handleChainChanged() {
+      window.location.reload();
+    }
+
+    // Event Listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log("Setting up event listeners");
+      
+      // Add click handler for connect wallet button
+      connectWalletBtn.addEventListener('click', connectWallet);
+      
+      // Add click handler for claim button
+      claimBtn.addEventListener('click', claimTokens);
+      
+      // Add network change handler
+      networkSelect.addEventListener('change', (e) => {
+        selectedNetwork = e.target.value;
+        if (provider) {
+          initializeContracts();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
